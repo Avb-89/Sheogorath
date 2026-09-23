@@ -10,9 +10,22 @@
 		000000000000000000000120 /* Sheogorath.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Sheogorath.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		7A982A7C3064153A00350C8A /* Exceptions for "Sheogorath" folder in "Sheogorath" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Core/Client/Terminal/UI/ANSI.swift,
+			);
+			target = 000000000000000100000000 /* Sheogorath */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		000000000000000000000010 /* Sheogorath */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				7A982A7C3064153A00350C8A /* Exceptions for "Sheogorath" folder in "Sheogorath" target */,
+			);
 			path = Sheogorath;
 			sourceTree = "<group>";
 		};
