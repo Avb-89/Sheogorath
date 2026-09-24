@@ -13,3 +13,6 @@ DerivedData/
 # Swift Package Manager — если когда-нибудь появится
 .build/
 .swiftpm/
+
+# Local documentation library
+Documentation/

@@ -12,16 +12,16 @@ struct CapabilityStore: Sendable {
 
     init() {
         fileURL = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/configs/mode.json")
+            .appendingPathComponent("Contents/Configs/mode.json")
     }
 
-    func load() -> CapabilityPolicy {
-        guard let data = try? Data(contentsOf: fileURL),
-              let policy = try? JSONDecoder().decode(CapabilityPolicy.self, from: data) else {
-            return CapabilityPolicy()
-        }
+    init(fileURL: URL) {
+        self.fileURL = fileURL.standardizedFileURL
+    }
 
-        return policy
+    func load() throws -> CapabilityPolicy {
+        let data = try Data(contentsOf: fileURL)
+        return try JSONDecoder().decode(CapabilityPolicy.self, from: data)
     }
 
     func save(_ policy: CapabilityPolicy) throws {

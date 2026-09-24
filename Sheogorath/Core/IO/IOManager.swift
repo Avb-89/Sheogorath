@@ -1,5 +1,5 @@
 //
-//  ChatManager.swift
+//  IOManager.swift
 //  Sheogorath
 //
 //  Created by SITIS on 9/23/26.
@@ -9,43 +9,43 @@ import Foundation
 import Combine
 
 @MainActor
-final class ChatManager: ObservableObject {
-    @Published private(set) var chats: [ChatSession] = []
-    @Published private(set) var activeChatID: UUID?
+final class IOManager: ObservableObject {
+    @Published private(set) var sessions: [IOSession] = []
+    @Published private(set) var activeSessionID: UUID?
 
-    var activeChat: ChatSession? {
-        guard let activeChatID else { return nil }
-        return chats.first { $0.id == activeChatID }
+    var activeSession: IOSession? {
+        guard let activeSessionID else { return nil }
+        return sessions.first { $0.id == activeSessionID }
     }
 
     @discardableResult
-    func createChat(title: String = "New Chat") -> UUID {
-        let chat = ChatSession(title: title)
-        chats.insert(chat, at: 0)
-        activeChatID = chat.id
-        return chat.id
+    func createSession(title: String = "New Session") -> UUID {
+        let session = IOSession(title: title)
+        sessions.insert(session, at: 0)
+        activeSessionID = session.id
+        return session.id
     }
 
-    func selectChat(_ id: UUID) {
-        guard chats.contains(where: { $0.id == id }) else { return }
-        activeChatID = id
+    func selectSession(_ id: UUID) {
+        guard sessions.contains(where: { $0.id == id }) else { return }
+        activeSessionID = id
     }
 
-    func append(_ message: Message, to chatID: UUID) {
-        guard let index = chats.firstIndex(where: { $0.id == chatID }) else { return }
-        chats[index].append(message)
+    func append(_ message: IOMessage, to sessionID: UUID) {
+        guard let index = sessions.firstIndex(where: { $0.id == sessionID }) else { return }
+        sessions[index].append(message)
     }
 
-    func renameChat(_ id: UUID, to title: String) {
-        guard let index = chats.firstIndex(where: { $0.id == id }) else { return }
-        chats[index].rename(to: title)
+    func renameSession(_ id: UUID, to title: String) {
+        guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
+        sessions[index].rename(to: title)
     }
 
-    func deleteChat(_ id: UUID) {
-        chats.removeAll { $0.id == id }
+    func deleteSession(_ id: UUID) {
+        sessions.removeAll { $0.id == id }
 
-        if activeChatID == id {
-            activeChatID = chats.first?.id
+        if activeSessionID == id {
+            activeSessionID = sessions.first?.id
         }
     }
 }

@@ -1,5 +1,5 @@
 //
-//  ChatSession.swift
+//  IOSession.swift
 //  Sheogorath
 //
 //  Created by SITIS on 9/23/26.
@@ -7,19 +7,19 @@
 
 import Foundation
 
-struct ChatSession: Identifiable, Codable, Equatable, Sendable {
+struct IOSession: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var title: String
     let createdAt: Date
     var updatedAt: Date
-    private(set) var messages: [Message]
+    private(set) var messages: [IOMessage]
 
     init(
         id: UUID = UUID(),
-        title: String = "New Chat",
+        title: String = "New Session",
         createdAt: Date = Date(),
         updatedAt: Date? = nil,
-        messages: [Message] = []
+        messages: [IOMessage] = []
     ) {
         self.id = id
         self.title = title
@@ -28,7 +28,7 @@ struct ChatSession: Identifiable, Codable, Equatable, Sendable {
         self.messages = messages
     }
 
-    mutating func append(_ message: Message) {
+    mutating func append(_ message: IOMessage) {
         messages.append(message)
         updatedAt = message.createdAt
     }

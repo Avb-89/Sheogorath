@@ -6,28 +6,26 @@
 //
 
 import SwiftUI
+import AppKit
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory)
+    }
+}
 
 @main
 struct SheogorathApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.openWindow) private var openWindow
 
-    // УДАЛИТЬ НА РЕЛИЗЕ
     init() {
+        // УДАЛИТЬ НА РЕЛИЗЕ
 #if DEBUG
         SheoTests.run()
 #endif
-        try? DevModelLink.install()
-
-        do {
-            let header = try InferenceEngine().readModelHeader()
-            print("GGUF version: \(header.version)")
-            print("GGUF tensors: \(header.tensorCount)")
-            print("GGUF metadata: \(header.metadataCount)")
-        } catch {
-            print("GGUF error: \(error)")
-        }
+        // УДАЛИТЬ НА РЕЛИЗЕ
     }
-    // УДАЛИТЬ НА РЕЛИЗЕ
 
     var body: some Scene {
         MenuBarExtra("Sheogorath", systemImage: "sparkles") {

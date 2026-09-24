@@ -10,13 +10,26 @@ import Combine
 
 @MainActor
 final class SheoCore: ObservableObject {
+    enum State: Equatable {
+        case ready
+        case oblivionMode(String)
+    }
+
+    @Published private(set) var state: State
     @Published private(set) var capabilityPolicy: CapabilityPolicy
 
     private let capabilityStore: CapabilityStore
 
     init(capabilityStore: CapabilityStore) {
         self.capabilityStore = capabilityStore
-        capabilityPolicy = capabilityStore.load()
+
+        do {
+            capabilityPolicy = try capabilityStore.load()
+            state = .ready
+        } catch {
+            capabilityPolicy = CapabilityPolicy()
+            state = .oblivionMode(error.localizedDescription)
+        }
     }
 
     convenience init() {
@@ -28,8 +41,13 @@ final class SheoCore: ObservableObject {
     }
 
     func canAccess(_ url: URL, context: ClientContext) -> Bool {
+        guard state == .ready else { return false }
         let profile = capabilityPolicy.profile(for: context.type)
         return CapabilityManager(profile: profile).canAccess(url)
+    }
+
+    func canAccess(_ url: URL, from client: ClientType) -> Bool {
+        canAccess(url, context: ClientContext(type: client))
     }
 
     func setCapabilityMode(_ mode: CapabilityMode, context: ClientContext) throws {
