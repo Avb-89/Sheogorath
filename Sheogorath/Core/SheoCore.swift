@@ -10,9 +10,11 @@ import Combine
 
 @MainActor
 final class SheoCore: ObservableObject {
+
     enum State: Equatable {
+        case booting
         case ready
-        case oblivionMode(String)
+        case sovngarde(CoreDiagnostic)
     }
 
     @Published private(set) var state: State
@@ -23,12 +25,13 @@ final class SheoCore: ObservableObject {
     init(capabilityStore: CapabilityStore) {
         self.capabilityStore = capabilityStore
 
-        do {
-            capabilityPolicy = try capabilityStore.load()
-            state = .ready
-        } catch {
-            capabilityPolicy = CapabilityPolicy()
-            state = .oblivionMode(error.localizedDescription)
+        capabilityPolicy = (try? capabilityStore.load()) ?? CapabilityPolicy()
+        state = .booting
+
+        try? capabilityStore.watch { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.reloadCapabilityPolicy()
+            }
         }
     }
 
@@ -36,80 +39,123 @@ final class SheoCore: ObservableObject {
         self.init(capabilityStore: CapabilityStore())
     }
 
-    func capabilityMode(for context: ClientContext) -> CapabilityMode {
-        capabilityPolicy.profile(for: context.type).mode
+    func startupCompleted(_ diagnostic: CoreDiagnostic) {
+        guard state == .booting else { return }
+
+        if diagnostic.passed {
+            state = .ready
+        } else {
+            state = .sovngarde(diagnostic)
+        }
     }
 
-    func canAccess(_ url: URL, context: ClientContext) -> Bool {
-        guard state == .ready else { return false }
-        let profile = capabilityPolicy.profile(for: context.type)
-        return CapabilityManager(profile: profile).canAccess(url)
+    func capabilityMode() -> CapabilityMode {
+        capabilityPolicy.profile.mode
     }
 
-    func canAccess(_ url: URL, from client: ClientType) -> Bool {
-        canAccess(url, context: ClientContext(type: client))
+    func canAccess(_ url: URL) -> Bool {
+        switch state {
+        case .ready, .booting:
+            return CapabilityManager(profile: capabilityPolicy.profile).canAccess(url)
+        case .sovngarde:
+            return isInsideInstallation(url)
+        }
     }
 
-    func setCapabilityMode(_ mode: CapabilityMode, context: ClientContext) throws {
-        var updatedPolicy = capabilityPolicy
-        var profile = updatedPolicy.profile(for: context.type)
-        profile.mode = mode
-        setProfile(profile, for: context.type, in: &updatedPolicy)
-        try save(updatedPolicy)
-    }
-
-    func addAllowedPath(_ path: String, context: ClientContext) throws {
-        var updatedPolicy = capabilityPolicy
-        var profile = updatedPolicy.profile(for: context.type)
-
-        if !profile.pelagiusIIIAllowedPaths.contains(path) {
-            profile.pelagiusIIIAllowedPaths.append(path)
+    func readProtected(_ url: URL, maximumBytes: Int = 4096) throws -> Data {
+        guard canAccess(url) else {
+            throw CocoaError(.fileReadNoPermission)
         }
 
-        setProfile(profile, for: context.type, in: &updatedPolicy)
-        try save(updatedPolicy)
-    }
-
-    func removeAllowedPath(_ path: String, context: ClientContext) throws {
-        var updatedPolicy = capabilityPolicy
-        var profile = updatedPolicy.profile(for: context.type)
-        profile.pelagiusIIIAllowedPaths.removeAll { $0 == path }
-        setProfile(profile, for: context.type, in: &updatedPolicy)
-        try save(updatedPolicy)
-    }
-
-    func addDeniedPath(_ path: String, context: ClientContext) throws {
-        var updatedPolicy = capabilityPolicy
-        var profile = updatedPolicy.profile(for: context.type)
-
-        if !profile.wabbajackDeniedPaths.contains(path) {
-            profile.wabbajackDeniedPaths.append(path)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(
+            atPath: url.path,
+            isDirectory: &isDirectory
+        ) else {
+            throw CocoaError(.fileReadNoSuchFile)
         }
 
-        setProfile(profile, for: context.type, in: &updatedPolicy)
-        try save(updatedPolicy)
+        if isDirectory.boolValue {
+            let handle = try FileHandle(forReadingFrom: url)
+            try handle.close()
+            return Data()
+        }
+
+        let handle = try FileHandle(forReadingFrom: url)
+        defer {
+            try? handle.close()
+        }
+
+        return try handle.read(upToCount: maximumBytes) ?? Data()
     }
 
-    func removeDeniedPath(_ path: String, context: ClientContext) throws {
+    func setCapabilityMode(_ mode: CapabilityMode) throws {
         var updatedPolicy = capabilityPolicy
-        var profile = updatedPolicy.profile(for: context.type)
-        profile.wabbajackDeniedPaths.removeAll { $0 == path }
-        setProfile(profile, for: context.type, in: &updatedPolicy)
+        updatedPolicy.profile.mode = mode
         try save(updatedPolicy)
     }
 
-    private func setProfile(
-        _ profile: CapabilityProfile,
-        for client: ClientType,
-        in policy: inout CapabilityPolicy
-    ) {
-        switch client {
-        case .native:
-            policy.native = profile
-        case .terminal:
-            policy.terminal = profile
-        case .web:
-            policy.web = profile
+    func addAllowedPath(_ path: String) throws {
+        var updatedPolicy = capabilityPolicy
+
+        if !updatedPolicy.profile.pelagiusIIIAllowedPaths.contains(path) {
+            updatedPolicy.profile.pelagiusIIIAllowedPaths.append(path)
+        }
+
+        try save(updatedPolicy)
+    }
+
+    func removeAllowedPath(_ path: String) throws {
+        var updatedPolicy = capabilityPolicy
+        updatedPolicy.profile.pelagiusIIIAllowedPaths.removeAll { $0 == path }
+        try save(updatedPolicy)
+    }
+
+    func addDeniedPath(_ path: String) throws {
+        var updatedPolicy = capabilityPolicy
+
+        if !updatedPolicy.profile.wabbajackDeniedPaths.contains(path) {
+            updatedPolicy.profile.wabbajackDeniedPaths.append(path)
+        }
+
+        try save(updatedPolicy)
+    }
+
+    func removeDeniedPath(_ path: String) throws {
+        var updatedPolicy = capabilityPolicy
+        updatedPolicy.profile.wabbajackDeniedPaths.removeAll { $0 == path }
+        try save(updatedPolicy)
+    }
+
+    private func isInsideInstallation(_ url: URL) -> Bool {
+        let installationURL = Bundle.main.bundleURL.standardizedFileURL.resolvingSymlinksInPath()
+        let targetURL = url.standardizedFileURL.resolvingSymlinksInPath()
+        let installationPath = installationURL.path.hasSuffix("/")
+            ? installationURL.path
+            : installationURL.path + "/"
+
+        return targetURL.path == installationURL.path || targetURL.path.hasPrefix(installationPath)
+    }
+
+    private func reloadCapabilityPolicy() {
+        do {
+            capabilityPolicy = try capabilityStore.load()
+            if state == .ready {
+                state = .ready
+            }
+        } catch {
+            state = .sovngarde(
+                CoreDiagnostic(
+                    failures: [
+                        CoreDiagnostic.Failure(
+                            section: "capability",
+                            step: "reload policy",
+                            detail: error.localizedDescription
+                        )
+                    ],
+                    skipped: []
+                )
+            )
         }
     }
 

@@ -52,11 +52,9 @@ struct TerminalShell {
         }
 
         let url = resolvedURL(for: arguments.first)
-        guard core.canAccess(url, from: .terminal) else {
-            return "permission denied: \(url.path)"
-        }
-
         do {
+            _ = try core.readProtected(url)
+
             let items = try FileManager.default.contentsOfDirectory(
                 at: url,
                 includingPropertiesForKeys: nil,
@@ -77,7 +75,7 @@ struct TerminalShell {
         }
 
         let url = resolvedURL(for: arguments[0])
-        guard core.canAccess(url, from: .terminal) else {
+        guard core.canAccess(url) else {
             return "permission denied: \(url.path)"
         }
 

@@ -7,16 +7,22 @@
 
 import Foundation
 
-struct CapabilityStore: Sendable {
+final class CapabilityStore: @unchecked Sendable {
     private let fileURL: URL
+    private var source: DispatchSourceFileSystemObject?
+    private var directoryDescriptor: Int32 = -1
 
     init() {
-        fileURL = Bundle.main.bundleURL
-            .appendingPathComponent("Contents/Configs/mode.json")
+        fileURL = Bundle.main.resourceURL!
+            .appendingPathComponent("Configs/mode.json")
     }
 
     init(fileURL: URL) {
         self.fileURL = fileURL.standardizedFileURL
+    }
+
+    deinit {
+        stopWatching()
     }
 
     func load() throws -> CapabilityPolicy {
@@ -35,5 +41,40 @@ struct CapabilityStore: Sendable {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         let data = try encoder.encode(policy)
         try data.write(to: fileURL, options: .atomic)
+    }
+
+    func watch(_ onChange: @escaping @Sendable () -> Void) throws {
+        stopWatching()
+
+        let directoryURL = fileURL.deletingLastPathComponent()
+        let descriptor = open(directoryURL.path, O_EVTONLY)
+        guard descriptor >= 0 else {
+            throw CocoaError(.fileReadNoSuchFile)
+        }
+
+        directoryDescriptor = descriptor
+
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: descriptor,
+            eventMask: [.write, .delete, .rename],
+            queue: DispatchQueue.global(qos: .userInitiated)
+        )
+
+        source.setEventHandler {
+            onChange()
+        }
+
+        source.setCancelHandler { [descriptor] in
+            close(descriptor)
+        }
+
+        self.source = source
+        source.resume()
+    }
+
+    func stopWatching() {
+        source?.cancel()
+        source = nil
+        directoryDescriptor = -1
     }
 }

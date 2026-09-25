@@ -9,6 +9,7 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
     }
@@ -18,13 +19,54 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct SheogorathApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @Environment(\.openWindow) private var openWindow
+    @StateObject private var core: SheoCore
 
+    @MainActor
     init() {
-        // УДАЛИТЬ НА РЕЛИЗЕ
+        var bootDiagnostic: CoreDiagnostic?
+
+        if Installation.state == .uninitialized {
+            do {
+                try Installation.initialize()
+            } catch {
+                bootDiagnostic = CoreDiagnostic(
+                    failures: [
+                        CoreDiagnostic.Failure(
+                            section: "boot",
+                            step: "factory",
+                            detail: error.localizedDescription
+                        )
+                    ],
+                    skipped: []
+                )
+            }
+        }
+
+        let core = SheoCore()
+        _core = StateObject(wrappedValue: core)
+
+        if let bootDiagnostic {
+            core.startupCompleted(bootDiagnostic)
+            return
+        }
+
+        let result = SelfCheckTest.run(core: core)
+        core.startupCompleted(result.diagnostic)
+
+        do {
+            try CoreLog.append(result.report + [""])
+        } catch {
 #if DEBUG
-        SheoTests.run()
+            print("[core-log FAILED]")
+            print(String(describing: error))
 #endif
-        // УДАЛИТЬ НА РЕЛИЗЕ
+        }
+
+#if DEBUG
+        for line in result.report {
+            print(line)
+        }
+#endif
     }
 
     var body: some Scene {
@@ -43,7 +85,9 @@ struct SheogorathApp: App {
 
         Window("Sheogorath", id: "chat") {
             ChatUI()
+                .environmentObject(core)
         }
         .defaultSize(width: 760, height: 560)
     }
 }
+
