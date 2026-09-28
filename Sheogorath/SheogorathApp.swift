@@ -12,6 +12,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(windowDidBecomeVisible(_:)),
+            name: NSWindow.didBecomeKeyNotification,
+            object: nil
+        )
+    }
+
+    @objc private func windowDidBecomeVisible(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow else { return }
+        window.level = .floating
     }
 }
 
@@ -90,4 +101,3 @@ struct SheogorathApp: App {
         .defaultSize(width: 760, height: 560)
     }
 }
-

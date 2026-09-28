@@ -7,6 +7,7 @@
 
 import Foundation
 import Combine
+import AppKit
 
 @MainActor
 final class SheoCore: ObservableObject {
@@ -19,6 +20,8 @@ final class SheoCore: ObservableObject {
 
     @Published private(set) var state: State
     @Published private(set) var capabilityPolicy: CapabilityPolicy
+
+    private(set) lazy var shell = CoreShell(core: self)
 
     private let capabilityStore: CapabilityStore
 
@@ -53,12 +56,20 @@ final class SheoCore: ObservableObject {
         capabilityPolicy.profile.mode
     }
 
+    func terminate() {
+        NSApplication.shared.terminate(nil)
+    }
+
     func canAccess(_ url: URL) -> Bool {
+        if isInsideInstallation(url) {
+            return true
+        }
+
         switch state {
         case .ready, .booting:
             return CapabilityManager(profile: capabilityPolicy.profile).canAccess(url)
         case .sovngarde:
-            return isInsideInstallation(url)
+            return false
         }
     }
 
@@ -76,8 +87,11 @@ final class SheoCore: ObservableObject {
         }
 
         if isDirectory.boolValue {
-            let handle = try FileHandle(forReadingFrom: url)
-            try handle.close()
+            _ = try FileManager.default.contentsOfDirectory(
+                at: url,
+                includingPropertiesForKeys: nil,
+                options: [.skipsHiddenFiles]
+            )
             return Data()
         }
 
