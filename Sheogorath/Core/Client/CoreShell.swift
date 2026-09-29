@@ -18,7 +18,13 @@ final class CoreShell {
     }
 
     func execute(_ input: String) -> String {
-        let arguments = input.split(whereSeparator: \.isWhitespace).map(String.init)
+        let arguments: [String]
+        do {
+            arguments = try parseArguments(input)
+        } catch {
+            return "parse error: \(error.localizedDescription)"
+        }
+
         guard let command = arguments.first else { return "" }
 
         switch command {
@@ -40,8 +46,81 @@ final class CoreShell {
             return move(arguments: Array(arguments.dropFirst()))
         case "rm":
             return remove(arguments: Array(arguments.dropFirst()))
+        case "echo":
+            return echo(arguments: Array(arguments.dropFirst()))
+        case "cat":
+            return cat(arguments: Array(arguments.dropFirst()))
         default:
             return "command not found: \(command)"
+        }
+    }
+
+    private func parseArguments(_ input: String) throws -> [String] {
+        enum Quote {
+            case single
+            case double
+        }
+
+        var arguments: [String] = []
+        var current = ""
+        var quote: Quote?
+        var hasContent = false
+
+        for character in input {
+            switch character {
+            case "'":
+                if quote == .double {
+                    current.append(character)
+                    hasContent = true
+                } else if quote == .single {
+                    quote = nil
+                } else {
+                    quote = .single
+                    hasContent = true
+                }
+            case "\"":
+                if quote == .single {
+                    current.append(character)
+                    hasContent = true
+                } else if quote == .double {
+                    quote = nil
+                } else {
+                    quote = .double
+                    hasContent = true
+                }
+            case " ", "\t", "\n", "\r":
+                if quote == nil {
+                    if hasContent {
+                        arguments.append(current)
+                        current = ""
+                        hasContent = false
+                    }
+                } else {
+                    current.append(character)
+                    hasContent = true
+                }
+            default:
+                current.append(character)
+                hasContent = true
+            }
+        }
+
+        guard quote == nil else {
+            throw ShellParseError.unterminatedQuote
+        }
+
+        if hasContent {
+            arguments.append(current)
+        }
+
+        return arguments
+    }
+
+    private enum ShellParseError: LocalizedError {
+        case unterminatedQuote
+
+        var errorDescription: String? {
+            "unterminated quote"
         }
     }
 
@@ -115,7 +194,8 @@ final class CoreShell {
             return "tree: not a directory: \(path ?? root.path)"
         }
 
-        var lines = [root.lastPathComponent.isEmpty ? root.path : root.lastPathComponent]
+        let rootLabel = path == nil ? "." : (root.lastPathComponent.isEmpty ? root.path : root.lastPathComponent)
+        var lines = [rootLabel]
         appendTree(
             at: root,
             prefix: "",
@@ -305,6 +385,28 @@ final class CoreShell {
             return ""
         } catch {
             return "rm: \(error.localizedDescription)"
+        }
+    }
+
+    private func echo(arguments: [String]) -> String {
+        arguments.joined(separator: " ")
+    }
+
+    private func cat(arguments: [String]) -> String {
+        guard arguments.count == 1 else {
+            return "usage: cat <file>"
+        }
+
+        let url = resolvedURL(for: arguments[0])
+
+        do {
+            let data = try core.readProtected(url)
+            guard let text = String(data: data, encoding: .utf8) else {
+                return "cat: file is not valid UTF-8: \(arguments[0])"
+            }
+            return text
+        } catch {
+            return "cat: \(error.localizedDescription)"
         }
     }
 }
