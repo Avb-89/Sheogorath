@@ -101,9 +101,11 @@ struct ChatUI: View {
                 return
             }
 
-            let output = core.shell.execute(command)
-            if !output.isEmpty {
-                transcript.append(output)
+            Task { @MainActor in
+                let output = await core.shell.execute(command)
+                if !output.isEmpty {
+                    transcript.append(output)
+                }
             }
         } else if command.hasPrefix("/") {
             let shellCommand = String(command.dropFirst()).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -112,9 +114,11 @@ struct ChatUI: View {
                 return
             }
 
-            let output = core.shell.execute(shellCommand)
-            if !output.isEmpty {
-                transcript.append(output)
+            Task { @MainActor in
+                let output = await core.shell.execute(shellCommand)
+                if !output.isEmpty {
+                    transcript.append(output)
+                }
             }
         } else {
             transcript.append("No conversational handler is available yet.")

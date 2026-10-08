@@ -15,7 +15,7 @@ struct TerminalShell {
         shell = core.shell
     }
 
-    mutating func execute(_ input: String) -> String {
-        shell.execute(input)
+    mutating func execute(_ input: String) async -> String {
+        await shell.execute(input)
     }
 }
